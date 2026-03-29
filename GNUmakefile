@@ -175,5 +175,16 @@ qemu: iso disk.img
 	qemu-system-x86_64 -cdrom image.iso -m 512M \
 		-drive file=disk.img,format=raw,if=ide,index=0 -boot d
 
+.PHONY: mount
+mount: disk.img
+	mkdir -p mnt
+	sudo mount -o loop,offset=0 disk.img mnt
+	xdg-open mnt
+
+.PHONY: umount
+umount:
+	sudo umount mnt
+	rmdir mnt
+
 .PHONY: run
 run: qemu

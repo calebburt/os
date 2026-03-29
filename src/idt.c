@@ -19,8 +19,9 @@ struct idt_ptr {
 static struct idt_entry idt[256];
 static struct idt_ptr idtr;
 
-// ISR stubs defined in isr.S
-extern void *isr_stub_table[];
+// Each ISR stub is aligned to 32 bytes in isr.S
+extern char isr_stubs_start[];
+#define ISR_STUB_SIZE 32
 
 void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr) {
     idt[vector].offset_low  = handler & 0xFFFF;
@@ -33,12 +34,13 @@ void idt_set_gate(uint8_t vector, uint64_t handler, uint8_t type_attr) {
 }
 
 void idt_init(void) {
-    // Set up all ISR stubs
+    uint64_t base = (uint64_t)isr_stubs_start;
+
     for (int i = 0; i < 256; i++) {
         // 0x8E = present, DPL 0, interrupt gate
-        // 0xEE = present, DPL 3, interrupt gate (for syscall)
+        // 0xEE = present, DPL 3, interrupt gate (for int 0x80 syscall)
         uint8_t attr = (i == 0x80) ? 0xEE : 0x8E;
-        idt_set_gate(i, (uint64_t)isr_stub_table[i], attr);
+        idt_set_gate(i, base + i * ISR_STUB_SIZE, attr);
     }
 
     idtr.limit = sizeof(idt) - 1;

@@ -127,7 +127,9 @@ int fgetc(struct FILE *stream) {
 }
 
 int getchar(void) {
-    return fgetc(stdin);
+    int c = fgetc(stdin);
+    putchar(c);  // Echo the character back to the user
+    return c;
 }
 
 char *fgets(char *str, int n, struct FILE *stream) {
@@ -143,6 +145,9 @@ char *fgets(char *str, int n, struct FILE *stream) {
             break;
         }
         str[i++] = (char)c;
+        if (stream == stdin) {
+            putchar(c);  // Echo input characters back to the user
+        }
         if (c == '\n') break;  // Stop at newline
     }
     
