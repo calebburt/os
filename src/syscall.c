@@ -1,5 +1,6 @@
 #include "syscall.h"
 #include "stdio.h"
+#include "io.h"
 
 // Syscall convention (matches Linux-style):
 //   RAX = syscall number
@@ -24,10 +25,10 @@ static void syscall_handler(struct interrupt_frame *frame) {
         frame->rax = len;
         break;
     }
-    case SYS_EXIT:
-        printf("\n[syscall] exit(%lu)\n", frame->rdi);
-        for (;;) asm volatile ("hlt");
+    case SYS_EXIT: {
+        shutdown();
         break;
+    }
     default:
         printf("[syscall] unknown syscall %lu\n", frame->rax);
         frame->rax = (uint64_t)-1;

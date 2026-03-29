@@ -12,6 +12,12 @@
 #include "ata.h"
 #include "fat32.h"
 #include "io.h"
+#include "gdt.h"
+#include "idt.h"
+#include "pic.h"
+#include "isr.h"
+#include "syscall.h"
+#include "syscall_helpers.h"
 
 // Set the base revision to 5, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -69,7 +75,7 @@ void fs_init(void) {
         // Try to mount an existing FAT32 filesystem
         struct filesystem *fat = fat32_mount_disk();
         if (fat) {
-            printf("FAT32 filesystem found, mounting at /disk\n");
+            printf("FAT32 filesystem found, mounting at /1\n");
         } else {
             printf("No FAT32 filesystem found, formatting...\n");
             fat = fat32_format(0, "MYOS");
@@ -88,27 +94,72 @@ void fs_init(void) {
 // linker script accordingly.
 void kmain(void) {
     init_fb();
+    clear_screen(0);
+
+    // Can't use printf until we initialize stdio, so we'll just print directly to the framebuffer for now
+    print_string("Initializing stdio...\n", 0xFFFFFF);
+
     stdio_init();
+
+    // Initialize interrupt infrastructure
+    printf("Initializing GDT, IDT, PIC, and syscalls...\n");
+    gdt_init();
+    idt_init();
+    pic_init();
+    syscall_init();
+
+    // Unmask keyboard IRQ (IRQ1) and timer (IRQ0)
+    pic_clear_mask(0);
+    pic_clear_mask(1);
+
+    // Enable interrupts
+    asm volatile ("sti");
+
+    puts("Interrupts enabled!");
+
     puts("Mounting filesystem...");
     fs_init();
 
-    clear_screen(0x000000);
+    puts("");
 
     puts("Hello world!");
-    puts("Serial output enabled!");
     printf("Testing printf: %d\n", 42);
 
+    // Don't need to use syscalls from within kernel
+
+    /*
+    // Test syscall via int 0x80
+    const char *syscall_msg = "Hello from syscall!\n";
+    sys_write(syscall_msg, 20);
+
+    // Test SYS_READ via int 0x80
+    char read_buf[2] = {0};
+    printf("Type a character (via syscall read): ");
+    sys_read(read_buf, 1);
+    printf("\nRead back: '%s'\n", read_buf);
+    */
+
     // Create and write a test file
-    struct inode *file = vfs_open("/1/hello.txt", O_CREAT | O_WRONLY);
-    if (file) {
-        const char *msg = "Hello from FAT32!";
+    char buffer[32] = "";
+    printf("Type a filename to open: ");
+    fgets(buffer, sizeof(buffer), stdin);
+    // sys_read(buffer, sizeof(buffer) - 1);
+    // buffer[sizeof(buffer) - 1] = '\0';  // Ensure null-termination
+
+    struct inode *file = vfs_open(buffer, O_CREAT | O_WRONLY);
+    if (file->size == 0) {
+        const char msg[50] = "";
+        printf("Type a message to write to the file '%s': ", buffer);
+        fgets((char *)msg, sizeof(msg), stdin);
         vfs_write(file, (const uint8_t *)msg, strlen(msg));
         vfs_close(file);
-        puts("Wrote /1/hello.txt");
+        puts("Wrote to file");
+    } else {
+        puts("File already exists!");
     }
 
     // Read it back
-    file = vfs_open("/1/hello.txt", O_RDONLY);
+    file = vfs_open(buffer, O_RDONLY);
     if (file) {
         uint8_t buf[128];
         int n = vfs_read(file, buf, sizeof(buf) - 1);
@@ -119,18 +170,14 @@ void kmain(void) {
         vfs_close(file);
     }
 
-    printf("\nEnter characters (echo mode): ");
+    printf("\nEnter characters for fun: ");
     char c = ' ';
     while (c != '\n') {
         c = getchar();
-        putchar(c);
     }
 
     puts("Press any key to exit:");
     getchar();
 
-    shutdown();
-
-    // // We're done, just hang...
-    // hcf();
+    sys_exit();
 }
