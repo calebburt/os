@@ -18,6 +18,7 @@
 #include "isr.h"
 #include "syscall.h"
 #include "syscall_helpers.h"
+#include "elf.h"
 
 // Set the base revision to 5, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -125,20 +126,6 @@ void kmain(void) {
     puts("Hello world!");
     printf("Testing printf: %d\n", 42);
 
-    // Don't need to use syscalls from within kernel
-
-    /*
-    // Test syscall via int 0x80
-    const char *syscall_msg = "Hello from syscall!\n";
-    sys_write(syscall_msg, 20);
-
-    // Test SYS_READ via int 0x80
-    char read_buf[2] = {0};
-    printf("Type a character (via syscall read): ");
-    sys_read(read_buf, 1);
-    printf("\nRead back: '%s'\n", read_buf);
-    */
-
     // Create and write a test file
     char buffer[32] = "";
     printf("Type a filename to open: ");
@@ -169,6 +156,11 @@ void kmain(void) {
         }
         vfs_close(file);
     }
+
+    char buffer_2[32] = "";
+    printf("Type a filename to execute: ");
+    fgets(buffer_2, sizeof(buffer_2), stdin);
+    run(*vfs_open(buffer_2, O_RDONLY));
 
     printf("\nEnter characters for fun: ");
     char c = ' ';
