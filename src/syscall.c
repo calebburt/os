@@ -10,16 +10,16 @@
 static void syscall_handler(struct interrupt_frame *frame) {
     switch (frame->rax) {
     case SYS_WRITE: {
-        const char *buf = (const char *)frame->rsi;
-        uint64_t len = frame->rdx;
+        const char *buf = (const char *)frame->rdi;
+        uint64_t len = frame->rsi;
         for (uint64_t i = 0; i < len; i++)
             putchar(buf[i]);
         frame->rax = len;
         break;
     }
     case SYS_READ: {
-        char *buf = (char *)frame->rsi;
-        uint64_t len = frame->rdx;
+        char *buf = (char *)frame->rdi;
+        uint64_t len = frame->rsi;
         for (uint64_t i = 0; i < len; i++)
             buf[i] = getchar();
         frame->rax = len;

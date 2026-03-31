@@ -21,12 +21,12 @@ void isr_handler_main(struct interrupt_frame *frame) {
     if (handlers[frame->vector]) {
         handlers[frame->vector](frame);
     } else if (frame->vector < 32) {
-        printf("\n!!! EXCEPTION: %s (#%lu) error_code=0x%lx\n",
+        printf("\n!!! EXCEPTION: %s (#%d) error_code=%d\n",
                frame->vector < 22 ? exception_names[frame->vector] : "Unknown",
                frame->vector, frame->error_code);
-        printf("    RIP=0x%lx CS=0x%lx RFLAGS=0x%lx\n",
+        printf("    RIP=0x%d CS=0x%d RFLAGS=0x%d\n",
                frame->rip, frame->cs, frame->rflags);
-        printf("    RAX=0x%lx RBX=0x%lx RCX=0x%lx RDX=0x%lx\n",
+        printf("    RAX=0x%d RBX=0x%d RCX=0x%d RDX=0x%d\n",
                frame->rax, frame->rbx, frame->rcx, frame->rdx);
         // Halt on unhandled exception
         for (;;) asm volatile ("hlt");

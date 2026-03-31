@@ -81,7 +81,7 @@ static void page_fault_handler(struct interrupt_frame *frame) {
     uint64_t fault_addr = read_cr2();
     uint64_t error = frame->error_code;
 
-    printf("\n!!! PAGE FAULT at vaddr=0x%lx\n", fault_addr);
+    printf("\n!!! PAGE FAULT at vaddr=%d\n", fault_addr);
     printf("    Error: %s %s %s\n",
            (error & 1) ? "protection-violation" : "not-present",
            (error & 2) ? "write" : "read",
