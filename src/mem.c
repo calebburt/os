@@ -1,9 +1,9 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <limine.h>
 
 // GCC and Clang reserve the right to generate calls to the following
 // 4 functions even if they are not directly called.
-// Implement them as the C specification mandates.
 
 void *memcpy(void *restrict dest, const void *restrict src, size_t n) {
     uint8_t *restrict pdest = (uint8_t *restrict)dest;
@@ -118,6 +118,63 @@ void *malloc(size_t size) {
     heap_offset = (heap_offset + 7) & ~7;
     
     return ptr;
+}
+
+// Physical memory manager — simple freelist built from Limine memory map
+// We need HHDM offset to access physical memory from higher-half kernel
+extern uint64_t hhdm_offset;
+
+#define PAGE_SIZE 4096
+
+// Freelist node stored at the start of each free physical page
+struct free_page {
+    struct free_page *next;
+};
+
+static struct free_page *free_list = NULL;
+static uint64_t total_free_pages = 0;
+
+void pmm_init(struct limine_memmap_response *memmap) {
+    free_list = NULL;
+    total_free_pages = 0;
+
+    for (uint64_t i = 0; i < memmap->entry_count; i++) {
+        struct limine_memmap_entry *entry = memmap->entries[i];
+        if (entry->type != LIMINE_MEMMAP_USABLE) continue;
+
+        uint64_t base = (entry->base + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        uint64_t end  = (entry->base + entry->length) & ~(PAGE_SIZE - 1);
+
+        for (uint64_t addr = base; addr < end; addr += PAGE_SIZE) {
+            // Skip the first 1MB (legacy BIOS area)
+            if (addr < 0x100000) continue;
+
+            struct free_page *page = (struct free_page *)(addr + hhdm_offset);
+            page->next = free_list;
+            free_list = page;
+            total_free_pages++;
+        }
+    }
+}
+
+uint64_t alloc_phys_page(void) {
+    if (!free_list) return 0;
+
+    struct free_page *page = free_list;
+    free_list = page->next;
+    total_free_pages--;
+
+    // Zero the page
+    uint64_t phys = (uint64_t)page - hhdm_offset;
+    memset(page, 0, PAGE_SIZE);
+    return phys;
+}
+
+void free_phys_page(uint64_t paddr) {
+    struct free_page *page = (struct free_page *)(paddr + hhdm_offset);
+    page->next = free_list;
+    free_list = page;
+    total_free_pages++;
 }
 
 void free(void *ptr) {

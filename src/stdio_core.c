@@ -145,8 +145,19 @@ char *fgets(char *str, int n, struct FILE *stream) {
             break;
         }
         str[i++] = (char)c;
+        if (c == '\b') { // handle backspace
+            if (i > 1) {
+                i -= 2;  // Remove the backspace and the character before it
+            } else {
+                i--;  // Just remove the backspace if it's the first character
+            }
+        }
         if (stream == stdin) {
-            putchar(c);  // Echo input characters back to the user
+            if (c == '\b' && i == 0) {
+                // don't backspace past the beginning of the line
+            } else {
+                putchar(c);  // Echo input characters back to the user
+            }
         }
         if (c == '\n') break;  // Stop at newline
     }
