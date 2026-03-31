@@ -19,6 +19,7 @@
 #include "syscall.h"
 #include "syscall_helpers.h"
 #include "elf.h"
+#include "page.h"
 
 // Set the base revision to 5, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -30,6 +31,18 @@ static volatile uint64_t limine_base_revision[] = LIMINE_BASE_REVISION(5);
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST_ID,
+    .revision = 0
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST_ID,
+    .revision = 0
+};
+
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_memmap_request memmap_request = {
+    .id = LIMINE_MEMMAP_REQUEST_ID,
     .revision = 0
 };
 
@@ -101,6 +114,14 @@ void kmain(void) {
     print_string("Initializing stdio...\n", 0xFFFFFF);
 
     stdio_init();
+
+    // Initialize paging subsystem (needs HHDM + memmap from Limine)
+    if (!hhdm_request.response || !memmap_request.response) {
+        print_string("FATAL: Limine HHDM or memmap response missing\n", 0xFF0000);
+        hcf();
+    }
+    paging_init(hhdm_request.response, memmap_request.response);
+    printf("Paging subsystem initialized.\n");
 
     // Initialize interrupt infrastructure
     printf("Initializing GDT, IDT, PIC, and syscalls...\n");
