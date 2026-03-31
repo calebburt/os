@@ -144,9 +144,6 @@ void kmain(void) {
 
     puts("");
 
-    puts("Hello world!");
-    printf("Testing printf: %d\n", 42);
-
     // Create and write a test file
     char buffer[32] = "";
     printf("Type a filename to open: ");
