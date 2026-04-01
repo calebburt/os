@@ -115,13 +115,14 @@ void kmain(void) {
 
     stdio_init();
 
+    puts("Initializing paging...");
+
     // Initialize paging subsystem (needs HHDM + memmap from Limine)
     if (!hhdm_request.response || !memmap_request.response) {
         print_string("FATAL: Limine HHDM or memmap response missing\n", 0xFF0000);
         hcf();
     }
     paging_init(hhdm_request.response, memmap_request.response);
-    printf("Paging subsystem initialized.\n");
 
     // Initialize interrupt infrastructure
     printf("Initializing GDT, IDT, PIC, and syscalls...\n");
@@ -144,36 +145,36 @@ void kmain(void) {
 
     puts("");
 
-    // Create and write a test file
-    char buffer[32] = "";
-    printf("Type a filename to open: ");
-    fgets(buffer, sizeof(buffer), stdin);
-    // sys_read(buffer, sizeof(buffer) - 1);
-    // buffer[sizeof(buffer) - 1] = '\0';  // Ensure null-termination
+    // // Create and write a test file
+    // char buffer[32] = "";
+    // printf("Type a filename to open: ");
+    // fgets(buffer, sizeof(buffer), stdin);
+    // // sys_read(buffer, sizeof(buffer) - 1);
+    // // buffer[sizeof(buffer) - 1] = '\0';  // Ensure null-termination
 
-    struct inode *file = vfs_open(buffer, O_CREAT | O_WRONLY);
-    if (file->size == 0) {
-        const char msg[50] = "";
-        printf("Type a message to write to the file '%s': ", buffer);
-        fgets((char *)msg, sizeof(msg), stdin);
-        vfs_write(file, (const uint8_t *)msg, strlen(msg));
-        vfs_close(file);
-        puts("Wrote to file");
-    } else {
-        puts("File already exists!");
-    }
+    // struct inode *file = vfs_open(buffer, O_CREAT | O_WRONLY);
+    // if (file->size == 0) {
+    //     const char msg[50] = "";
+    //     printf("Type a message to write to the file '%s': ", buffer);
+    //     fgets((char *)msg, sizeof(msg), stdin);
+    //     vfs_write(file, (const uint8_t *)msg, strlen(msg));
+    //     vfs_close(file);
+    //     puts("Wrote to file");
+    // } else {
+    //     puts("File already exists!");
+    // }
 
-    // Read it back
-    file = vfs_open(buffer, O_RDONLY);
-    if (file) {
-        uint8_t buf[128];
-        int n = vfs_read(file, buf, sizeof(buf) - 1);
-        if (n > 0) {
-            buf[n] = '\0';
-            printf("Read back: %s\n", (char *)buf);
-        }
-        vfs_close(file);
-    }
+    // // Read it back
+    // file = vfs_open(buffer, O_RDONLY);
+    // if (file) {
+    //     uint8_t buf[128];
+    //     int n = vfs_read(file, buf, sizeof(buf) - 1);
+    //     if (n > 0) {
+    //         buf[n] = '\0';
+    //         printf("Read back: %s\n", (char *)buf);
+    //     }
+    //     vfs_close(file);
+    // }
 
     char buffer_2[32] = "";
     printf("Type a filename to execute: ");

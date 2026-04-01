@@ -99,8 +99,6 @@ int run(struct inode file) {
     printf("Jumping to ELF entry point 0x%lx\n", entry_point);
 
     // Jump to entry point (ring 0, same address space)
-    void (*entry)(void) = (void (*)(void))entry_point;
-    entry();
-
-    return 0;
+    int (*entry)(void) = (int (*)(void))entry_point;
+    return entry();
 }
