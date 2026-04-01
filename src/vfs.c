@@ -5,9 +5,15 @@
 // Maximum number of mounted filesystems
 #define MAX_MOUNTS 16
 
+// Maximum number of files opened at the same time
+#define MAX_OPENS 16
+
 // Global mount table
 static struct filesystem *mount_table[MAX_MOUNTS];
 static int mount_count = 0;
+
+static struct open_file handles[MAX_OPENS];
+static int open_count = 0;
 
 // VFS initialization
 void vfs_init(void) {
@@ -137,6 +143,11 @@ struct inode *vfs_open(const char *path, int flags) {
     }
     
     return ino;
+}
+
+struct open_file vfs_open_handle(const char *path, int flags) {
+    struct open_file file;
+    file.inode = vfs_open(path, flags);
 }
 
 // Read from an inode

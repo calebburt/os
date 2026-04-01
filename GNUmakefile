@@ -164,8 +164,8 @@ iso: bin/$(OUTPUT)
 	# Install Limine stage 1 and 2 for legacy BIOS boot.
 	./limine/limine bios-install image.iso
 
-test.elf:
-	gcc -ffreestanding -nostdlib -static -o test.elf test.c
+sh.elf: sh.c
+	gcc -ffreestanding -nostdlib -static -o sh.elf sh.c
 
 # Create a blank disk image if it doesn't exist
 disk.img:

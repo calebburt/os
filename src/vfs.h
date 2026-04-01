@@ -45,6 +45,13 @@ struct filesystem {
     struct inode *root;              // Root inode of this filesystem
 };
 
+// Open file with handle
+
+struct open_file {
+    int handle;
+    struct inode *inode;
+};
+
 // VFS initialization
 void vfs_init(void);
 

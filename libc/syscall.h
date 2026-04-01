@@ -18,12 +18,12 @@ static inline long syscall(long num, long arg1, long arg2, long arg3) {
 }
 
 // Helper functions for syscalls
-static long sys_write(const char *buf, long len) {
-    return syscall(SYS_WRITE, (long)buf, len, 0);
+static long sys_write(char character) {
+    return syscall(SYS_WRITE, (long)character, 0, 0);
 }
 
-static long sys_read(char *buf, long len) {
-    return syscall(SYS_READ, (long)buf, len, 0);
+static long sys_read() {
+    return syscall(SYS_READ, 0, 0, 0);
 }
 
 static void sys_exit(void) {
