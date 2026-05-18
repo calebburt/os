@@ -17,7 +17,6 @@
 #include "pic.h"
 #include "isr.h"
 #include "syscall.h"
-#include "syscall_helpers.h"
 #include "elf.h"
 #include "page.h"
 
@@ -91,8 +90,11 @@ void fs_init(void) {
         if (fat) {
             printf("FAT32 filesystem found, mounting at /1\n");
         } else {
-            printf("No FAT32 filesystem found, formatting...\n");
-            fat = fat32_format(0, "MYOS");
+            printf("No FAT32 filesystem found, would you like to format? [yn] ");
+            if (getchar() == 'y')
+                fat = fat32_format(0, "MYOS");
+            else
+                return;
         }
 
         if (fat) {
@@ -103,9 +105,7 @@ void fs_init(void) {
     }
 }
 
-// The following will be our kernel's entry point.
-// If renaming kmain() to something else, make sure to change the
-// linker script accordingly.
+// kernel entry point
 void kmain(void) {
     init_fb();
     clear_screen(0);
@@ -176,19 +176,34 @@ void kmain(void) {
     //     vfs_close(file);
     // }
 
-    char buffer_2[32] = "";
-    printf("Type a filename to execute: ");
-    fgets(buffer_2, sizeof(buffer_2), stdin);
-    run(*vfs_open(buffer_2, O_RDONLY));
+    // char buffer_2[32] = "";
+    // printf("Type a filename to execute: ");
+    // fgets(buffer_2, sizeof(buffer_2), stdin);
+    // struct inode *file = vfs_open(buffer_2, O_RDONLY);
+    // if (file == NULL) {
+    //     puts("File not found.");
+    // } else
+    //     run(*file);
 
-    printf("\nEnter characters for fun: ");
-    char c = ' ';
-    while (c != '\n') {
-        c = getchar();
-    }
+    // printf("\nEnter characters for fun: ");
+    // char c = ' ';
+    // while (c != '\n') {
+    //     c = getchar();
+    // }
 
-    puts("Press any key to exit:");
-    getchar();
+    // puts("Press any key to exit:");
+    // getchar();
 
-    sys_exit();
+    for (int i = 0; i < 50000; i++) { putchar(' '); } // wait to see messages
+    clear_screen(0);
+    printf("\n");
+
+    char *path = "/1/sh.elf";
+    struct inode *file = vfs_open(path, O_RDONLY);
+    if (file == NULL) {
+        puts("Shell not found.");
+    } else
+        run(*file, NULL, 0);
+
+    shutdown();
 }

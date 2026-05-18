@@ -2,7 +2,7 @@
 #include "mem.h"
 #include "page.h"
 
-int run(struct inode file) {
+int run(struct inode file, char *argv[], int argn) {
     char* buf = (char*)malloc(file.size);
     if (!buf) {
         printf("Failed to allocate memory for ELF file\n");
@@ -16,7 +16,7 @@ int run(struct inode file) {
         return -1;
     }
 
-    // Validate ELF magic
+    // Validate ELF magic number
     if (buf[0] != 0x7F || buf[1] != 'E' || buf[2] != 'L' || buf[3] != 'F') {
         printf("Not a valid ELF file\n");
         free(buf);
@@ -52,7 +52,20 @@ int run(struct inode file) {
     uint16_t program_header_entry_size = *(uint16_t*)(buf + 54);
     uint16_t program_header_entry_count = *(uint16_t*)(buf + 56);
 
-    uint64_t *pml4 = get_kernel_pml4();
+    // Create a new address space for this process
+    uint64_t *new_pml4 = clone_pml4();
+    if (!new_pml4) {
+        printf("Failed to allocate page table for process\n");
+        free(buf);
+        return -1;
+    }
+
+    // Save the caller's CR3 and switch to the new address space
+    uint64_t old_cr3 = get_cr3();
+    uint64_t new_cr3 = virt_to_phys(new_pml4);
+    switch_address_space(new_cr3);
+
+    uint64_t *pml4 = new_pml4;
 
     for (int i = 0; i < program_header_entry_count; i++) {
         char* ph = buf + program_header_offset + i * program_header_entry_size;
@@ -66,8 +79,8 @@ int run(struct inode file) {
         uint64_t memsz  = *(uint64_t*)(ph + 40);
         uint32_t flags  = *(uint32_t*)(ph + 4);
 
-        printf("  Loading segment: vaddr=0x%lx filesz=0x%lx memsz=0x%lx\n",
-               vaddr, filesz, memsz);
+        // printf("  Loading segment: vaddr=0x%lx filesz=0x%lx memsz=0x%lx\n",
+        //        vaddr, filesz, memsz);
 
         // Map pages for this segment
         uint64_t page_start = vaddr & ~(PAGE_SIZE - 1ULL);
@@ -96,9 +109,18 @@ int run(struct inode file) {
         }
     }
 
-    printf("Jumping to ELF entry point 0x%lx\n", entry_point);
+    // printf("Jumping to ELF entry point 0x%lx\n", entry_point);
 
-    // Jump to entry point (ring 0, same address space)
-    int (*entry)(void) = (int (*)(void))entry_point;
-    return entry();
+    // Jump to entry point (ring 0, separate address space)
+    int (*entry)(char **, int) = (int (*)(char **, int))entry_point;
+    int ret = entry(argv, argn);
+
+    // Switch back to the caller's address space
+    switch_address_space(old_cr3);
+
+    // Free the child's user-space pages and the PML4 itself
+    free_user_pages(new_pml4);
+    free_phys_page(new_cr3);
+
+    return ret;
 }

@@ -4,6 +4,6 @@
 #include "stdio.h"
 #include "vfs.h"
 
-int run(struct inode file);
+int run(struct inode file, char *argv[], int argn);
 
 #endif

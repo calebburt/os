@@ -164,8 +164,11 @@ iso: bin/$(OUTPUT)
 	# Install Limine stage 1 and 2 for legacy BIOS boot.
 	./limine/limine bios-install image.iso
 
-sh.elf: sh.c
-	gcc -ffreestanding -nostdlib -static -o sh.elf sh.c
+sh: sh.c
+	gcc -ffreestanding -nostdlib -static -o sh sh.c
+
+cat: cat.c
+	gcc -ffreestanding -nostdlib -static -o cat cat.c
 
 # Create a blank disk image if it doesn't exist
 disk.img:
@@ -175,7 +178,7 @@ disk.img:
 qemu: iso disk.img
 	unset GTK_EXE_PREFIX LOCPATH XDG_DATA_HOME GSETTINGS_SCHEMA_DIR GIO_MODULE_DIR GTK_PATH GTK_IM_MODULE_FILE; \
 	qemu-system-x86_64 -cdrom image.iso -m 512M \
-		-drive file=disk.img,format=raw,if=ide,index=0 -boot d
+		-drive file=disk.img,format=raw,if=ide,index=0 -boot d --enable-kvm
 
 .PHONY: mount
 mount: disk.img
@@ -187,6 +190,10 @@ mount: disk.img
 umount:
 	sudo umount mnt
 	rmdir mnt
+
+user: sh cat
+	sudo cp sh mnt/
+	sudo cp cat mnt/
 
 .PHONY: run
 run: qemu

@@ -4,6 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define MAX_OPENS 16
+
+extern struct open_file *handles[MAX_OPENS];
+extern int open_count;
+
 // Forward declarations
 struct inode;
 struct filesystem;
@@ -48,7 +53,7 @@ struct filesystem {
 // Open file with handle
 
 struct open_file {
-    int handle;
+    long handle;
     struct inode *inode;
 };
 
@@ -70,5 +75,8 @@ int vfs_close(struct inode *ino);
 int vfs_lookup_path(const char *path, struct inode **ino);
 int vfs_mkdir(const char *path);
 int vfs_rmdir(const char *path);
+
+// User-space utils
+struct open_file *vfs_open_handle(const char *path, int flags);
 
 #endif

@@ -1,19 +1,19 @@
 #include "vfs.h"
+#include "mem.h"
+#include "stdio.h"
 #include <stddef.h>
 #include <string.h>
+
+// Open file handle table (defined here, declared extern in vfs.h)
+struct open_file *handles[MAX_OPENS];
+int open_count = 0;
 
 // Maximum number of mounted filesystems
 #define MAX_MOUNTS 16
 
-// Maximum number of files opened at the same time
-#define MAX_OPENS 16
-
 // Global mount table
 static struct filesystem *mount_table[MAX_MOUNTS];
 static int mount_count = 0;
-
-static struct open_file handles[MAX_OPENS];
-static int open_count = 0;
 
 // VFS initialization
 void vfs_init(void) {
@@ -145,9 +145,18 @@ struct inode *vfs_open(const char *path, int flags) {
     return ino;
 }
 
-struct open_file vfs_open_handle(const char *path, int flags) {
-    struct open_file file;
-    file.inode = vfs_open(path, flags);
+struct open_file *vfs_open_handle(const char *path, int flags) {
+    if (open_count >= MAX_OPENS) return NULL;
+    struct open_file *file = malloc(sizeof(struct open_file));
+    file->inode = vfs_open(path, flags);
+    if (!file->inode) {
+        free(file);
+        return NULL;
+    }
+    file->handle = open_count;
+    handles[open_count] = file;
+    open_count++;
+    return file;
 }
 
 // Read from an inode

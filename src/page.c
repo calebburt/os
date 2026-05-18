@@ -92,6 +92,60 @@ static void page_fault_handler(struct interrupt_frame *frame) {
     for (;;) asm volatile("hlt");
 }
 
+uint64_t *clone_pml4(void) {
+    uint64_t phys = alloc_phys_page();
+    if (!phys) return NULL;
+
+    uint64_t *new_pml4 = (uint64_t *)phys_to_virt(phys);
+    // alloc_phys_page zeroes the page, so lower 256 entries are already 0
+
+    // Share the kernel-half (entries 256..511) with the kernel PML4
+    for (int i = 256; i < 512; i++) {
+        new_pml4[i] = kernel_pml4[i];
+    }
+
+    return new_pml4;
+}
+
+void free_user_pages(uint64_t *pml4) {
+    // Walk the lower 256 PML4 entries (user-space) and free all page table
+    // levels and the physical pages they map.
+    for (int i = 0; i < 256; i++) {
+        if (!(pml4[i] & PTE_PRESENT)) continue;
+        uint64_t *pdpt = (uint64_t *)phys_to_virt(pml4[i] & 0x000FFFFFFFFFF000ULL);
+
+        for (int j = 0; j < 512; j++) {
+            if (!(pdpt[j] & PTE_PRESENT)) continue;
+            uint64_t *pd = (uint64_t *)phys_to_virt(pdpt[j] & 0x000FFFFFFFFFF000ULL);
+
+            for (int k = 0; k < 512; k++) {
+                if (!(pd[k] & PTE_PRESENT)) continue;
+                uint64_t *pt = (uint64_t *)phys_to_virt(pd[k] & 0x000FFFFFFFFFF000ULL);
+
+                for (int l = 0; l < 512; l++) {
+                    if (!(pt[l] & PTE_PRESENT)) continue;
+                    // Free the mapped physical page
+                    free_phys_page(pt[l] & 0x000FFFFFFFFFF000ULL);
+                }
+                // Free the PT page itself
+                free_phys_page(pd[k] & 0x000FFFFFFFFFF000ULL);
+            }
+            // Free the PD page itself
+            free_phys_page(pdpt[j] & 0x000FFFFFFFFFF000ULL);
+        }
+        // Free the PDPT page itself
+        free_phys_page(pml4[i] & 0x000FFFFFFFFFF000ULL);
+    }
+}
+
+void switch_address_space(uint64_t cr3_phys) {
+    write_cr3(cr3_phys);
+}
+
+uint64_t get_cr3(void) {
+    return read_cr3();
+}
+
 void paging_init(struct limine_hhdm_response *hhdm, struct limine_memmap_response *memmap) {
     // Store the HHDM offset (used everywhere for phys<->virt)
     hhdm_offset = hhdm->offset;

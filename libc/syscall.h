@@ -2,9 +2,12 @@
 #define SYSCALL_H
 
 // Syscall numbers
-#define SYS_WRITE  0
-#define SYS_READ   1
-#define SYS_EXIT   2
+#define SYS_EXIT      0
+#define SYS_WRITE     1
+#define SYS_READ      2
+#define SYS_OPEN      3
+#define SYS_READ_FILE 4
+#define SYS_EXEC      5
 
 static inline long syscall(long num, long arg1, long arg2, long arg3) {
     long ret;
@@ -28,6 +31,18 @@ static long sys_read() {
 
 static void sys_exit(void) {
     syscall(SYS_EXIT, 0, 0, 0);
+}
+
+static int sys_exec(char *path, char *argv[], int argn) {
+    return syscall(SYS_EXEC, (long)path, (long)argv, (long)argn);
+}
+
+static long sys_open(char *path, int flags) {
+    return syscall(SYS_OPEN, (long)path, (long)flags, 0);
+}
+
+static char *sys_read_file(long handle) {
+    return (char*)syscall(SYS_READ_FILE, handle, 0, 0);
 }
 
 #endif

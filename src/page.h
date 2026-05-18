@@ -34,4 +34,19 @@ void map_pages(uint64_t *pml4, uint64_t vaddr, uint64_t paddr, uint64_t size, ui
 // Get the kernel's PML4 (virtual address)
 uint64_t *get_kernel_pml4(void);
 
+// Create a new PML4 that shares the kernel-half (upper 256 entries) of the
+// current kernel PML4, with an empty user-half (lower 256 entries).
+// Returns the virtual address of the new PML4, or NULL on failure.
+uint64_t *clone_pml4(void);
+
+// Free all user-space page table levels and mapped physical pages
+// (lower 256 PML4 entries). Does NOT free the PML4 page itself.
+void free_user_pages(uint64_t *pml4);
+
+// Switch CR3 (address space). Takes a physical address.
+void switch_address_space(uint64_t cr3_phys);
+
+// Get current CR3 value
+uint64_t get_cr3(void);
+
 #endif
