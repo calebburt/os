@@ -755,6 +755,33 @@ static int fat32_fs_rmdir(struct filesystem *fs __attribute__((unused)),
     return -1; // not implemented
 }
 
+static int fat32_fs_unlink(struct filesystem *fs, const char *path) {
+    if (!fs || !path) return -1;
+    struct fat32_private *priv = (struct fat32_private *)fs->fs_data;
+
+    struct fat32_dir_entry entry;
+    uint32_t dc, doff;
+    if (fat32_resolve_path(priv, path, &entry, &dc, &doff, 0, NULL) < 0)
+        return -1;
+    if (entry.attr & ATTR_DIRECTORY) return -1; // use rmdir for directories
+
+    // Free the cluster chain
+    uint32_t cluster = ((uint32_t)entry.first_cluster_hi << 16) | entry.first_cluster_lo;
+    while (cluster >= 2 && cluster < FAT32_EOC) {
+        uint32_t next = fat_read_entry(priv, cluster);
+        if (fat_write_entry(priv, cluster, FAT32_FREE) < 0) return -1;
+        cluster = next;
+    }
+
+    // Mark the directory entry as deleted (0xE5 in name[0]).
+    uint32_t lba = cluster_to_lba(priv, dc) + (doff / 512);
+    if (ata_read_sectors(lba, 1, sector_buf) < 0) return -1;
+    sector_buf[(doff % 512)] = 0xE5;
+    if (ata_write_sectors(lba, 1, sector_buf) < 0) return -1;
+
+    return 0;
+}
+
 static void fat32_fs_unmount(struct filesystem *fs) {
     if (fs && fs->fs_data) {
         free(fs->fs_data);
@@ -767,6 +794,7 @@ static struct filesystem_ops fat32_fs_ops = {
     .open    = fat32_fs_open,
     .mkdir   = fat32_fs_mkdir,
     .rmdir   = fat32_fs_rmdir,
+    .unlink  = fat32_fs_unlink,
     .unmount = fat32_fs_unmount,
 };
 

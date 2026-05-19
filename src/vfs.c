@@ -258,3 +258,11 @@ int vfs_rmdir(const char *path) {
     
     return fs->ops->rmdir(fs, rel_path ? rel_path : path);
 }
+
+int vfs_unlink(const char *path) {
+    if (!path) return -1;
+    const char *rel_path = NULL;
+    struct filesystem *fs = vfs_find_filesystem(path, &rel_path);
+    if (!fs || !fs->ops || !fs->ops->unlink) return -1;
+    return fs->ops->unlink(fs, rel_path ? rel_path : path);
+}

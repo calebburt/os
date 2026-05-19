@@ -45,6 +45,7 @@ struct filesystem_ops {
     int (*lookup)(struct filesystem *fs, const char *name, struct inode **ino);
     int (*mkdir)(struct filesystem *fs, const char *path);
     int (*rmdir)(struct filesystem *fs, const char *path);
+    int (*unlink)(struct filesystem *fs, const char *path);
     int (*open)(struct filesystem *fs, const char *path, int flags, struct inode **ino);
     void (*unmount)(struct filesystem *fs);
 };
@@ -96,6 +97,7 @@ int vfs_readdir(struct inode *ino, int index, struct dirent *out);
 int vfs_lookup_path(const char *path, struct inode **ino);
 int vfs_mkdir(const char *path);
 int vfs_rmdir(const char *path);
+int vfs_unlink(const char *path);
 
 // User-space utils
 struct open_file *vfs_open_handle(const char *path, int flags);
