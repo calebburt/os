@@ -153,7 +153,8 @@ struct open_file *vfs_open_handle(const char *path, int flags) {
         free(file);
         return NULL;
     }
-    file->handle = open_count;
+    // Skip 0/1/2 so file handles never collide with stdin/stdout/stderr.
+    file->handle = open_count + 3;
     handles[open_count] = file;
     open_count++;
     return file;
@@ -192,6 +193,23 @@ int vfs_seek(struct inode *ino, long offset, int whence) {
     }
     
     return ino->ops->seek(ino, offset, whence);
+}
+
+// Stat: resolve path, copy out size+mode, then close.
+int vfs_stat(const char *path, struct stat *out) {
+    if (!path || !out) return -1;
+    struct inode *ino = vfs_open(path, 0);
+    if (!ino) return -1;
+    out->size = ino->size;
+    out->mode = ino->mode;
+    vfs_close(ino);
+    return 0;
+}
+
+// Enumerate a directory entry by index.
+int vfs_readdir(struct inode *ino, int index, struct dirent *out) {
+    if (!ino || !out || !ino->ops || !ino->ops->readdir) return -1;
+    return ino->ops->readdir(ino, index, out);
 }
 
 // Close an inode

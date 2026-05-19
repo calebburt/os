@@ -4,7 +4,11 @@
 #include "syscall.h"
 #include <stdarg.h>
 
-int strlen(const char *str) {
+#define stdin 0
+#define stdout 1
+#define stderr 2
+
+static inline int strlen(const char *str) {
     int len = 0;
     while (*str != '\0') {
         len++;
@@ -14,29 +18,25 @@ int strlen(const char *str) {
 }
 
 static inline void putchar(char character) {
-    sys_write(character);
+    sys_write(stdout, &character, 1);
 }
 
 static inline void print(const char* string) {
-    int len = strlen(string);
-
-    for (int i=0;i<len;i++) {
-        sys_write(string[i]);
-    }
+    sys_write(stdout, string, strlen(string));
 }
 
 static inline void puts(const char* string) {
     print(string);
-    
-    sys_write('\n');
+    putchar('\n');
 }
 
-static inline long gets(char* buf, int len)  { // not actually the right api 
+static inline long gets(char* buf, int len)  { // not actually the right api
     int i = 0;
     while (i < len - 1) {  // Leave room for null terminator
-        char c = sys_read();
+        char c;
+        if (sys_read(stdin, &c, 1) <= 0) break;
 
-        buf[i++] = (char)c;
+        buf[i++] = c;
         if (c == '\b') { // handle backspace
             if (i > 1) {
                 i -= 2;  // Remove the backspace and the character before it
@@ -46,7 +46,7 @@ static inline long gets(char* buf, int len)  { // not actually the right api
         }
         if (c == '\n') break;  // Stop at newline
     }
-    
+
     buf[i] = '\0';
     return i;
 }

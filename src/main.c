@@ -198,7 +198,7 @@ void kmain(void) {
     clear_screen(0);
     printf("\n");
 
-    char *path = "/1/sh.elf";
+    char *path = "/1/sh";
     struct inode *file = vfs_open(path, O_RDONLY);
     if (file == NULL) {
         puts("Shell not found.");

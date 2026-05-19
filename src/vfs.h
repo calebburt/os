@@ -6,6 +6,24 @@
 
 #define MAX_OPENS 16
 
+// POSIX-style mode bits encoded in inode->mode and stat::mode.
+#define S_IFMT   0170000
+#define S_IFDIR  0040000
+#define S_IFREG  0100000
+#define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
+#define S_ISREG(m) (((m) & S_IFMT) == S_IFREG)
+
+struct stat {
+    uint64_t size;
+    uint32_t mode;
+};
+
+struct dirent {
+    char     name[64];
+    uint32_t mode;
+    uint64_t size;
+};
+
 extern struct open_file *handles[MAX_OPENS];
 extern int open_count;
 
@@ -18,6 +36,7 @@ struct inode_ops {
     int (*read)(struct inode *ino, uint8_t *buf, size_t offset, size_t len);
     int (*write)(struct inode *ino, const uint8_t *buf, size_t offset, size_t len);
     int (*seek)(struct inode *ino, long offset, int whence);
+    int (*readdir)(struct inode *ino, int index, struct dirent *out);
     void (*close)(struct inode *ino);
 };
 
@@ -70,6 +89,8 @@ int vfs_read(struct inode *ino, uint8_t *buf, size_t len);
 int vfs_write(struct inode *ino, const uint8_t *buf, size_t len);
 int vfs_seek(struct inode *ino, long offset, int whence);
 int vfs_close(struct inode *ino);
+int vfs_stat(const char *path, struct stat *out);
+int vfs_readdir(struct inode *ino, int index, struct dirent *out);
 
 // Path resolution
 int vfs_lookup_path(const char *path, struct inode **ino);

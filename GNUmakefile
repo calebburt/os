@@ -107,7 +107,7 @@ override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
 
 # Default target. This must come first, before header dependencies.
 .PHONY: all
-all: bin/$(OUTPUT)
+all: image.iso disk.img
 
 # Include header dependencies.
 -include $(HEADER_DEPS)
@@ -138,7 +138,9 @@ clean:
 	rm -rf bin obj
 
 .PHONY: iso
-iso: bin/$(OUTPUT)
+iso: image.iso
+
+image.iso: bin/$(OUTPUT) limine.conf linker.lds
 	# Create a directory which will be our ISO root.
 	mkdir -p iso_root
 
@@ -164,15 +166,30 @@ iso: bin/$(OUTPUT)
 	# Install Limine stage 1 and 2 for legacy BIOS boot.
 	./limine/limine bios-install image.iso
 
-sh: sh.c
-	gcc -ffreestanding -nostdlib -static -o sh sh.c
+# User-space programs: every user/*.c becomes user/<name> (no extension).
+override USER_SRCS := $(wildcard user/*.c)
+override USER_BINS := $(USER_SRCS:.c=)
 
-cat: cat.c
-	gcc -ffreestanding -nostdlib -static -o cat cat.c
+user/%: user/%.c libc/stdio.h libc/syscall.h
+	gcc -ffreestanding -nostdlib -static -I. -o $@ $<
 
-# Create a blank disk image if it doesn't exist
-disk.img:
-	dd if=/dev/zero of=disk.img bs=1M count=64
+.PHONY: user-bins
+user-bins: $(USER_BINS)
+
+# FAT32 disk image, populated with the user-space binaries. Created (and
+# formatted) on first build, then `mcopy`d on subsequent builds — no sudo
+# or loop mount needed. Requires `mtools` (sudo apt install mtools).
+disk.img: $(USER_BINS)
+	@command -v mcopy >/dev/null 2>&1 || { \
+		echo "mtools not installed. Run: sudo apt install mtools"; exit 1; }
+	@if [ ! -f $@ ]; then \
+		dd if=/dev/zero of=$@ bs=1M count=64 status=none; \
+		mformat -i $@ -F -v MYOS ::; \
+	fi
+	@for b in $(USER_BINS); do \
+		echo "  COPY $$b -> $@"; \
+		mcopy -i $@ -o $$b ::/ ; \
+	done
 
 .PHONY: qemu
 qemu: iso disk.img
@@ -191,9 +208,9 @@ umount:
 	sudo umount mnt
 	rmdir mnt
 
-user: sh cat
-	sudo cp sh mnt/
-	sudo cp cat mnt/
+.PHONY: user
+user: $(USER_BINS)
+	for b in $(USER_BINS); do sudo cp $$b mnt/; done
 
 .PHONY: run
 run: qemu

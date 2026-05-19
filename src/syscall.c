@@ -17,24 +17,72 @@ static void syscall_handler(struct interrupt_frame *frame) {
         break;
     }
     case SYS_WRITE: {
-        // const char *buf = (const char *)frame->rdi;
-        // uint64_t len = frame->rsi;
-        // for (uint64_t i = 0; i < len; i++)
-        //     putchar(buf[i]);
-        // frame->rax = len;
+        // RDI = file descriptor, RSI = buffer, RDX = length
 
-        putchar((char)frame->rdi);
-        frame->rax = 0;
+        switch (frame->rdi) { // file descriptor (0 = stdin, 1 = stdout, 2 = stderr)
+            case 0: // stdin
+                frame->rax = -1; // cannot write to stdin
+                break;
+            case 1: // stdout
+                // fallthrough for now
+            case 2: // stderr
+                for (uint64_t i = 0; i < frame->rdx; i++)
+                    putchar(((char*)frame->rsi)[i]);
+                frame->rax = frame->rdx;
+                break;
+            default:
+                long handle = frame->rdi;
+                struct open_file *file = NULL;
+                for(int i = 0;i<MAX_OPENS;i++) {
+                    if (handles[i] != NULL && handles[i]->handle == handle) {
+                        file = handles[i];
+                        break;
+                    }
+                }
+                
+                if (file != NULL) {
+                    frame->rax = vfs_write(file->inode, (uint8_t*)frame->rsi, frame->rdx);
+                } else {
+                    frame->rax = -1;
+                }
+                break;
+        }
         break;
     }
     case SYS_READ: {
-        // char *buf = (char *)frame->rdi;
-        // uint64_t len = frame->rsi;
-        // for (uint64_t i = 0; i < len; i++)
-        //     buf[i] = getchar();
-        // frame->rax = len;
-
-        frame->rax = getchar();
+        // RDI = file descriptor, RSI = buffer, RDX = length
+        switch (frame->rdi) { // file descriptor (0 = stdin, 1 = stdout, 2 = stderr)
+            case 0: { // stdin — line-buffered: stop after '\n'
+                char *buf = (char*)frame->rsi;
+                uint64_t i;
+                for (i = 0; i < frame->rdx; i++) {
+                    buf[i] = getchar();
+                    if (buf[i] == '\n') { i++; break; }
+                }
+                frame->rax = i;
+                break;
+            }
+            case 1: // stdout
+            case 2: // stderr
+                frame->rax = -1; // cannot read from stdout/stderr
+                break;
+            default:
+                long handle = frame->rdi;
+                struct open_file *file = NULL;
+                for(int i = 0;i<MAX_OPENS;i++) {
+                    if (handles[i] != NULL && handles[i]->handle == handle) {
+                        file = handles[i];
+                        break;
+                    }
+                }
+                
+                if (file != NULL) {
+                    frame->rax = vfs_read(file->inode, (uint8_t*)frame->rsi, frame->rdx);
+                } else {
+                    frame->rax = -1;
+                }
+                break;
+        }
         break;
     }
     case SYS_OPEN: {
@@ -50,29 +98,29 @@ static void syscall_handler(struct interrupt_frame *frame) {
         frame->rax = (long)file->handle;
         break;
     }
-    case SYS_READ_FILE: {
+    case SYS_CLOSE: {
         long handle = frame->rdi;
-        struct open_file *file = NULL;
+        int found = 0;
         for(int i = 0;i<MAX_OPENS;i++) {
             if (handles[i] != NULL && handles[i]->handle == handle) {
-                file = handles[i];
+                free(handles[i]);
+                handles[i] = NULL;
+                found = 1;
                 break;
             }
         }
-        
-        if (file != NULL) {
-            char *buf = (char*)malloc(file->inode->size);
-
-            vfs_read(file->inode, (uint8_t*)buf, file->inode->size);
-
-            frame->rax = (long)buf;
-        } else {
-            frame->rax = (long)NULL;
-        }
+        frame->rax = found ? 0 : -1;
         break;
     }
-    case SYS_WRITE_FILE: {
+    case SYS_UNLINK: {
+        char *path = (char*)frame->rdi;
+        frame->rax = vfs_unlink(path);
+        break;
+    }
+    case SYS_LSEEK: {
         long handle = frame->rdi;
+        long offset = frame->rsi;
+        int whence = frame->rdx;
         struct open_file *file = NULL;
         for(int i = 0;i<MAX_OPENS;i++) {
             if (handles[i] != NULL && handles[i]->handle == handle) {
@@ -80,12 +128,15 @@ static void syscall_handler(struct interrupt_frame *frame) {
                 break;
             }
         }
-        
-        if (file != NULL) {
-            
-        } else {
+        if (file == NULL || file->inode == NULL) {
             frame->rax = -1;
+            break;
         }
+        if (vfs_seek(file->inode, offset, whence) < 0) {
+            frame->rax = -1;
+            break;
+        }
+        frame->rax = file->inode->position;
         break;
     }
     case SYS_EXEC: {
@@ -97,7 +148,7 @@ static void syscall_handler(struct interrupt_frame *frame) {
             break;
         }
 
-        frame->rax = run(*file, frame->rsi, frame->rdx);
+        frame->rax = run(*file, (char**)frame->rsi, frame->rdx);
         break;
     }
     default:

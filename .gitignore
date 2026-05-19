@@ -2,3 +2,7 @@ limine/*
 obj/*
 iso_root/*
 mnt/*
+# Compiled user-space binaries (everything in user/ that isn't a source file)
+user/*
+!user/*.c
+!user/*.h

@@ -498,6 +498,52 @@ static int fat32_inode_seek(struct inode *ino, long offset, int whence) {
     return 0;
 }
 
+// Convert FAT 8.3 name ("HELLO   TXT") to display name ("HELLO.TXT").
+static void from_fat_name(const char *fat_name, char *out) {
+    int o = 0;
+    for (int i = 0; i < 8 && fat_name[i] != ' '; i++) out[o++] = fat_name[i];
+    int has_ext = 0;
+    for (int i = 8; i < 11; i++) if (fat_name[i] != ' ') { has_ext = 1; break; }
+    if (has_ext) {
+        out[o++] = '.';
+        for (int i = 8; i < 11 && fat_name[i] != ' '; i++) out[o++] = fat_name[i];
+    }
+    out[o] = '\0';
+}
+
+static int fat32_inode_readdir(struct inode *ino, int index, struct dirent *out) {
+    if (!ino || !ino->fs || !ino->fs_data || !out) return -1;
+    struct fat32_private *priv = (struct fat32_private *)ino->fs->fs_data;
+    struct fat32_file_data *fd = (struct fat32_file_data *)ino->fs_data;
+    if (!fd->is_dir) return -1;
+
+    uint32_t cluster = fd->first_cluster;
+    int seen = 0;
+    while (cluster >= 2 && cluster < FAT32_EOC) {
+        uint32_t lba = cluster_to_lba(priv, cluster);
+        for (uint8_t s = 0; s < priv->sectors_per_cluster; s++) {
+            if (ata_read_sectors(lba + s, 1, sector_buf) < 0) return -1;
+            for (int e = 0; e < 512 / 32; e++) {
+                struct fat32_dir_entry *de = (struct fat32_dir_entry *)(sector_buf + e * 32);
+                if (de->name[0] == 0x00) return -1; // end of directory
+                if ((uint8_t)de->name[0] == 0xE5) continue;
+                if (de->attr == ATTR_LONG_NAME) continue;
+                if (de->attr & ATTR_VOLUME_ID) continue;
+
+                if (seen == index) {
+                    from_fat_name(de->name, out->name);
+                    out->mode = (de->attr & ATTR_DIRECTORY) ? (S_IFDIR | 0755) : (S_IFREG | 0644);
+                    out->size = de->file_size;
+                    return 0;
+                }
+                seen++;
+            }
+        }
+        cluster = fat_read_entry(priv, cluster);
+    }
+    return -1;
+}
+
 static void fat32_inode_close(struct inode *ino) {
     if (ino && ino->fs_data) {
         free(ino->fs_data);
@@ -506,10 +552,11 @@ static void fat32_inode_close(struct inode *ino) {
 }
 
 static struct inode_ops fat32_inode_ops = {
-    .read  = fat32_inode_read,
-    .write = fat32_inode_write,
-    .seek  = fat32_inode_seek,
-    .close = fat32_inode_close,
+    .read    = fat32_inode_read,
+    .write   = fat32_inode_write,
+    .seek    = fat32_inode_seek,
+    .readdir = fat32_inode_readdir,
+    .close   = fat32_inode_close,
 };
 
 // ── VFS filesystem operations ───────────────────────────────────────────────
@@ -537,7 +584,7 @@ static int fat32_fs_lookup(struct filesystem *fs, const char *name, struct inode
     fd->is_dir = (entry.attr & ATTR_DIRECTORY) ? 1 : 0;
 
     node->inode_num = fd->first_cluster;
-    node->mode = fd->is_dir ? 0755 : 0644;
+    node->mode = (fd->is_dir ? S_IFDIR | 0755 : S_IFREG | 0644);
     node->size = fd->file_size;
     node->ref_count = 1;
     node->fs = fs;
@@ -609,7 +656,7 @@ static int fat32_fs_open(struct filesystem *fs, const char *path, int flags, str
     fd->is_dir = (entry.attr & ATTR_DIRECTORY) ? 1 : 0;
 
     node->inode_num = fd->first_cluster;
-    node->mode = fd->is_dir ? 0755 : 0644;
+    node->mode = (fd->is_dir ? S_IFDIR | 0755 : S_IFREG | 0644);
     node->size = fd->file_size;
     node->ref_count = 1;
     node->fs = fs;
