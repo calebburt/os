@@ -6,7 +6,12 @@
 #define SYS_WRITE      1
 #define SYS_READ       2
 #define SYS_OPEN       3
-#define SYS_EXEC       4
+#define SYS_CLOSE      4
+#define SYS_UNLINK     5
+#define SYS_LSEEK      6
+#define SYS_EXEC       7
+#define SYS_STAT       8
+#define SYS_READDIR    9
 
 static inline long syscall(long num, long arg1, long arg2, long arg3) {
     long ret;

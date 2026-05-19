@@ -139,6 +139,30 @@ static void syscall_handler(struct interrupt_frame *frame) {
         frame->rax = file->inode->position;
         break;
     }
+    case SYS_STAT: {
+        char *path = (char*)frame->rdi;
+        struct stat *out = (struct stat*)frame->rsi;
+        frame->rax = vfs_stat(path, out);
+        break;
+    }
+    case SYS_READDIR: {
+        long handle = frame->rdi;
+        int index = (int)frame->rsi;
+        struct dirent *out = (struct dirent*)frame->rdx;
+        struct open_file *file = NULL;
+        for(int i = 0;i<MAX_OPENS;i++) {
+            if (handles[i] != NULL && handles[i]->handle == handle) {
+                file = handles[i];
+                break;
+            }
+        }
+        if (file == NULL || file->inode == NULL) {
+            frame->rax = -1;
+            break;
+        }
+        frame->rax = vfs_readdir(file->inode, index, out);
+        break;
+    }
     case SYS_EXEC: {
         char *path = (char*)frame->rdi;
         struct inode *file = vfs_open(path, O_RDONLY);
