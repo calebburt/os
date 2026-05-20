@@ -101,8 +101,10 @@ char *strncpy(char *dest, const char *src, size_t n) {
     return dest;
 }
 
-// Simple heap allocator (bump allocator)
-#define HEAP_SIZE 262144
+// Simple heap allocator (bump allocator).
+// Sized generously so flanterm's per-FB allocations (font, grid, queue, map,
+// optional canvas) plus the kernel's other needs all fit.
+#define HEAP_SIZE (4 * 1024 * 1024)
 static uint8_t heap[HEAP_SIZE];
 static size_t heap_offset = 0;
 

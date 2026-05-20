@@ -19,6 +19,9 @@
 #include "syscall.h"
 #include "elf.h"
 #include "page.h"
+#include "mem.h"
+#include "flanterm/flanterm.h"
+#include "flanterm/flanterm_backends/fb.h"
 
 // Set the base revision to 5, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -45,6 +48,12 @@ static volatile struct limine_memmap_request memmap_request = {
     .revision = 0
 };
 
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_flanterm_fb_init_params_request flanterm_request = {
+    .id = LIMINE_FLANTERM_FB_INIT_PARAMS_REQUEST_ID,
+    .revision = 0
+};
+
 // Finally, define the start and end markers for the Limine requests.
 
 __attribute__((used, section(".limine_requests_start")))
@@ -58,6 +67,16 @@ static void hcf(void) {
     for (;;) {
         asm ("hlt");
     }
+}
+
+// Used by fb.c and stdio_core.c to route text output through flanterm.
+struct flanterm_context *flanterm_ctx = NULL;
+
+// flanterm wants a free() that takes (ptr, size); the kernel's free() takes
+// only ptr. Wrap to match the expected signature.
+static void flanterm_free(void *ptr, size_t size) {
+    (void)size;
+    free(ptr);
 }
 
 void init_fb(void) {
@@ -75,8 +94,26 @@ void init_fb(void) {
     // Fetch the first framebuffer.
     struct limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
 
-    // Initialize the framebuffer module
-    fb_init(framebuffer);
+    // Initialize flanterm with the framebuffer geometry from Limine.
+    // Pass NULL for the optional fields so flanterm uses its built-in
+    // defaults (font, palette, white-on-black) — safer than trusting the
+    // optional Limine response, which can be zeroed.
+    flanterm_ctx = flanterm_fb_init(
+        malloc, flanterm_free,
+        framebuffer->address, framebuffer->width, framebuffer->height, framebuffer->pitch,
+        framebuffer->red_mask_size, framebuffer->red_mask_shift,
+        framebuffer->green_mask_size, framebuffer->green_mask_shift,
+        framebuffer->blue_mask_size, framebuffer->blue_mask_shift,
+        /* canvas              */ NULL,
+        /* ansi_colours        */ NULL, /* ansi_bright_colours */ NULL,
+        /* default_bg          */ NULL, /* default_fg          */ NULL,
+        /* default_bg_bright   */ NULL, /* default_fg_bright   */ NULL,
+        /* font                */ NULL,
+        /* font_width/height/spacing */ 0, 0, 0,
+        /* font_scale_x/y      */ 0, 0,
+        /* margin              */ 0,
+        /* rotation            */ FLANTERM_FB_ROTATE_0
+    );
 }
 
 void fs_init(void) {
@@ -143,67 +180,16 @@ void kmain(void) {
     puts("Mounting filesystem...");
     fs_init();
 
-    puts("");
-
-    // // Create and write a test file
-    // char buffer[32] = "";
-    // printf("Type a filename to open: ");
-    // fgets(buffer, sizeof(buffer), stdin);
-    // // sys_read(buffer, sizeof(buffer) - 1);
-    // // buffer[sizeof(buffer) - 1] = '\0';  // Ensure null-termination
-
-    // struct inode *file = vfs_open(buffer, O_CREAT | O_WRONLY);
-    // if (file->size == 0) {
-    //     const char msg[50] = "";
-    //     printf("Type a message to write to the file '%s': ", buffer);
-    //     fgets((char *)msg, sizeof(msg), stdin);
-    //     vfs_write(file, (const uint8_t *)msg, strlen(msg));
-    //     vfs_close(file);
-    //     puts("Wrote to file");
-    // } else {
-    //     puts("File already exists!");
-    // }
-
-    // // Read it back
-    // file = vfs_open(buffer, O_RDONLY);
-    // if (file) {
-    //     uint8_t buf[128];
-    //     int n = vfs_read(file, buf, sizeof(buf) - 1);
-    //     if (n > 0) {
-    //         buf[n] = '\0';
-    //         printf("Read back: %s\n", (char *)buf);
-    //     }
-    //     vfs_close(file);
-    // }
-
-    // char buffer_2[32] = "";
-    // printf("Type a filename to execute: ");
-    // fgets(buffer_2, sizeof(buffer_2), stdin);
-    // struct inode *file = vfs_open(buffer_2, O_RDONLY);
-    // if (file == NULL) {
-    //     puts("File not found.");
-    // } else
-    //     run(*file);
-
-    // printf("\nEnter characters for fun: ");
-    // char c = ' ';
-    // while (c != '\n') {
-    //     c = getchar();
-    // }
-
-    // puts("Press any key to exit:");
-    // getchar();
-
-    for (int i = 0; i < 50000; i++) { putchar(' '); } // wait to see messages
-    clear_screen(0);
-    printf("\n");
-
     char *path = "/1/sh";
     struct inode *file = vfs_open(path, O_RDONLY);
     if (file == NULL) {
         puts("Shell not found.");
-    } else
+        hcf();
+    } else {
+        clear_screen(0);
+        printf("\n");
         run(*file, NULL, 0);
+    }
 
     shutdown();
 }

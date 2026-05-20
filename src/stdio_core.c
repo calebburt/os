@@ -4,15 +4,20 @@
 #include "keyboard.h"
 #include "fb.h"
 #include "vfs.h"
+#include "flanterm/flanterm.h"
 
-// Write to framebuffer and serial
+extern struct flanterm_context *flanterm_ctx;
+
+// Write to flanterm (framebuffer terminal) and serial
 static int fb_write(struct FILE *stream, const char *buf, size_t len) {
     if (!stream || !buf) {
         return -1;
     }
+    if (flanterm_ctx) {
+        flanterm_write(flanterm_ctx, buf, len);
+    }
     for (size_t i = 0; i < len; i++) {
-        print_char(buf[i], 0xFFFFFF);  // White text
-        serial_putchar(buf[i]);        // Also output to serial
+        serial_putchar(buf[i]);
     }
     return (int)len;
 }
