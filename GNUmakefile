@@ -201,7 +201,6 @@ qemu: iso disk.img
 mount: disk.img
 	mkdir -p mnt
 	sudo mount -o loop,offset=0 disk.img mnt
-	xdg-open mnt
 
 .PHONY: umount
 umount:
