@@ -1,12 +1,12 @@
 #include "libc/stdio.h"
 
-int _start(char *argv[], int argn) {
-    if (argn < 1) {
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
         puts("Usage: cat <file>");
         return 1;
     }
 
-    long handle = sys_open(argv[0], 0);
+    long handle = sys_open(argv[1], 0);
     if (handle < 0) {
         puts("Failed to open file");
         return 1;

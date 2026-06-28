@@ -1,14 +1,12 @@
 #include "libc/stdio.h"
 
-// Print the first 10 lines of a file. Reads one buffer's worth — see
-// note in wc.c about SYS_READ not signalling EOF.
-int _start(char *argv[], int argn) {
-    if (argn < 1) {
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
         puts("Usage: head <file>");
         return 1;
     }
 
-    long handle = sys_open(argv[0], 0);
+    long handle = sys_open(argv[1], 0);
     if (handle < 0) {
         puts("Failed to open file");
         return 1;
@@ -27,6 +25,6 @@ int _start(char *argv[], int argn) {
         if (buf[i] == '\0') break;
         if (buf[i] == '\n') lines++;
     }
-    sys_write(stdout, buf, i);
+    sys_write(1, buf, i);
     return 0;
 }

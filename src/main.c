@@ -142,8 +142,21 @@ void fs_init(void) {
     }
 }
 
+static void cpu_enable_sse(void) {
+    uint64_t cr0, cr4;
+    asm volatile("mov %%cr0, %0" : "=r"(cr0));
+    cr0 &= ~(1ULL << 2);  // clear EM: no FPU emulation
+    cr0 |=  (1ULL << 1);  // set MP: monitor coprocessor
+    asm volatile("mov %0, %%cr0" :: "r"(cr0));
+    asm volatile("mov %%cr4, %0" : "=r"(cr4));
+    cr4 |= (1ULL << 9);   // OSFXSR: enable FXSAVE/FXRSTOR and SSE
+    cr4 |= (1ULL << 10);  // OSXMMEXCPT: SSE exceptions → #XF not #UD
+    asm volatile("mov %0, %%cr4" :: "r"(cr4));
+}
+
 // kernel entry point
 void kmain(void) {
+    cpu_enable_sse();
     init_fb();
     clear_screen(0);
 

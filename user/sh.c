@@ -1,6 +1,8 @@
 #include "libc/stdio.h"
 
-int _start(char *argv[], int argn) {
+int main(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     const char *prompt = "$ ";
     char buf[64];
 
@@ -15,7 +17,8 @@ int _start(char *argv[], int argn) {
             // split by spaces, and exec the first part as the command, and the rest as arguments
             char *cmd = buf;
             char *args[16];
-            int arg_count = 0;
+            // args[0] = argv[0] (program name); extra args start at index 1
+            int arg_count = 1;
             for (int i = 0; buf[i]; i++) {
                 if (buf[i] == ' ') {
                     buf[i] = 0; // null-terminate the command/argument
@@ -31,6 +34,9 @@ int _start(char *argv[], int argn) {
                 snprintf(temp, sizeof(temp), "/1/%s", cmd);
                 cmd = temp;
             }
+
+            // argv[0] = program path (convention: argv[0] is always the program name)
+            args[0] = cmd;
 
             int errno = sys_exec(cmd, args, arg_count);
             if (errno == -1) {

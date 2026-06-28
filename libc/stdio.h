@@ -2,101 +2,75 @@
 #define STDIO_H
 
 #include "syscall.h"
+#include <stdint.h>
 #include <stdarg.h>
+#include <stddef.h>
 
-#define stdin 0
-#define stdout 1
-#define stderr 2
+struct FILE {
+    int (*write)(struct FILE *stream, const char *buf, size_t len);
+    int (*read)(struct FILE *stream, char *buf, size_t len);
+    int (*seek)(struct FILE *stream, long offset, int whence);
+    int (*close)(struct FILE *stream);
 
-static inline int strlen(const char *str) {
-    int len = 0;
-    while (*str != '\0') {
-        len++;
-        str++;
-    }
+    uint32_t flags;     // O_RDONLY, O_WRONLY, etc.
+    void    *fs_data;   // fd stored as (void*)(uintptr_t)fd for regular files
+    size_t   position;
+    size_t   size;
+    uint8_t  type;
+};
+
+typedef struct FILE FILE;
+
+#define FILE_TYPE_TTY       0x01
+#define FILE_TYPE_REGULAR   0x02
+#define FILE_TYPE_DIR       0x04
+#define FILE_TYPE_DEVICE    0x08
+
+extern FILE *stdout;
+extern FILE *stderr;
+extern FILE *stdin;
+
+// Standard I/O
+int    fputc(int c, FILE *stream);
+int    fputs(const char *str, FILE *stream);
+int    putchar(int c);
+int    puts(const char *str);
+int    fgetc(FILE *stream);
+int    getchar(void);
+char  *fgets(char *str, int n, FILE *stream);
+int    fprintf(FILE *stream, const char *format, ...);
+int    vfprintf(FILE *stream, const char *format, va_list args);
+int    printf(const char *format, ...);
+int    vprintf(const char *format, va_list args);
+int    snprintf(char *buf, int size, const char *format, ...);
+int    vsnprintf(char *buf, int size, const char *format, va_list args);
+void   stdio_init(void);
+
+// File operations
+FILE  *fopen(const char *path, const char *mode);
+size_t fread(void *buf, size_t size, size_t count, FILE *stream);
+size_t fwrite(const void *buf, size_t size, size_t count, FILE *stream);
+int    fseek(FILE *stream, long offset, int whence);
+long   ftell(FILE *stream);
+void   rewind(FILE *stream);
+int    fclose(FILE *stream);
+
+// Backward-compat helpers (used by existing user programs)
+// Guard strlen so it doesn't conflict when <string.h> is also included.
+#ifndef _STRING_H
+static inline size_t strlen(const char *str) {
+    size_t len = 0;
+    while (*str++) len++;
     return len;
 }
+#endif
 
-static inline void putchar(char character) {
-    sys_write(stdout, &character, 1);
+static inline void print(const char *str) {
+    fputs(str, stdout);
 }
 
-static inline void print(const char* string) {
-    sys_write(stdout, string, strlen(string));
-}
-
-static inline void puts(const char* string) {
-    print(string);
-    putchar('\n');
-}
-
-static inline long gets(char* buf, int len)  { // not actually the right api
-    int i = 0;
-    while (i < len - 1) {  // Leave room for null terminator
-        char c;
-        if (sys_read(stdin, &c, 1) <= 0) break;
-
-        buf[i++] = c;
-        if (c == '\b') { // handle backspace
-            if (i > 1) {
-                i -= 2;  // Remove the backspace and the character before it
-            } else {
-                i--;  // Just remove the backspace if it's the first character
-            }
-        }
-        if (c == '\n') break;  // Stop at newline
-    }
-
-    buf[i] = '\0';
-    return i;
-}
-
-static inline int snprintf(char* buf, int size, const char* format, ...) {
-    // This is a very minimal snprintf implementation that only supports %s and %d
-    // It also does not support field width or precision. It is only intended for
-    // simple use cases in this kernel.
-
-    va_list args;
-    va_start(args, format);
-
-    int i = 0; // index in format string
-    int j = 0; // index in output buffer
-
-    while (format[i] && j < size - 1) {
-        if (format[i] == '%') {
-            i++;
-            if (format[i] == 's') {
-                char* str = va_arg(args, char*);
-                while (*str && j < size - 1) {
-                    buf[j++] = *str++;
-                }
-            } else if (format[i] == 'd') {
-                int num = va_arg(args, int);
-                char temp[16];
-                int k = 0;
-                if (num < 0) {
-                    buf[j++] = '-';
-                    num = -num;
-                }
-                do {
-                    temp[k++] = '0' + (num % 10);
-                    num /= 10;
-                } while (num > 0 && k < sizeof(temp));
-                for (int l = k - 1; l >= 0 && j < size - 1; l--) {
-                    buf[j++] = temp[l];
-                }
-            } else {
-                buf[j++] = format[i]; // Unsupported format specifier, just print it
-            }
-        } else {
-            buf[j++] = format[i];
-        }
-        i++;
-    }
-
-    buf[j] = '\0';
-    va_end(args);
-    return j;
+static inline long gets(char *buf, int len) {
+    return fgets(buf, len, stdin) ? (long)strlen(buf) : 0;
 }
 
 #endif

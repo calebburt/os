@@ -1,7 +1,7 @@
 #include "libc/stdio.h"
 
-int _start(char *argv[], int argn) {
+int main(int argc, char *argv[]) {
+    (void)argc;
     (void)argv;
-    (void)argn;
     return 0;
 }

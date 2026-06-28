@@ -1,7 +1,7 @@
 #include "libc/stdio.h"
 
-int _start(char *argv[], int argn) {
-    const char *s = argn > 0 ? argv[0] : "y";
+int main(int argc, char *argv[]) {
+    const char *s = argc > 1 ? argv[1] : "y";
     while (1) puts(s);
     return 0;
 }

@@ -109,18 +109,54 @@ int run(struct inode file, char *argv[], int argn) {
         }
     }
 
-    // printf("Jumping to ELF entry point 0x%lx\n", entry_point);
+    // Dedicated stack for the user process (2 MB in BSS — zero file-size cost).
+    // Programs like interpreters allocate hundreds of KB on the C stack
+    // (e.g. a 256 KB VM struct), which would overflow the kernel stack if we
+    // called entry() directly.
+#define USER_STACK_SIZE (2 * 1024 * 1024)
+    static uint8_t user_stack[USER_STACK_SIZE];
+    uint64_t user_stack_top = ((uint64_t)(user_stack + USER_STACK_SIZE)) & ~15ULL;
 
-    // Jump to entry point (ring 0, separate address space)
-    int (*entry)(char **, int) = (int (*)(char **, int))entry_point;
-    int ret = entry(argv, argn);
+    // Determine where the child process's stack starts.
+    //
+    // If we're already executing on user_stack (i.e. this run() was reached via
+    // a syscall from a user process), the kernel call chain occupies the upper
+    // part of user_stack.  Resetting RSP to user_stack_top would let the child
+    // grow back into those kernel frames and corrupt them (e.g. overwriting
+    // old_cr3 with stack data → GPF on cleanup).  Instead, start just below the
+    // current RSP so the child grows away from the kernel frames.
+    //
+    // If we're not on user_stack (first process, called from the kernel's own
+    // stack), switch to user_stack_top as before.
+    uint64_t cur_rsp;
+    asm volatile("mov %%rsp, %0" : "=r"(cur_rsp));
+    uint64_t new_rsp;
+    if (cur_rsp >= (uint64_t)user_stack && cur_rsp < user_stack_top)
+        new_rsp = cur_rsp & ~15ULL;   // nested: stay at current depth
+    else
+        new_rsp = user_stack_top;     // first process: use full stack
 
-    // Switch back to the caller's address space
+    // Switch rsp to new_rsp, call the entry point, then restore.
+    // We save the kernel rsp in a static (RIP-relative address, always valid).
+    // Register layout: "a"=rax (entry), "b"=rbx (new rsp), "D"=rdi (argv),
+    //                  "S"=rsi (argn).  `call` makes callee see rsp = 16n-8.
+    static uint64_t _saved_kernel_rsp;
+    printf("[elf] calling entry=0x%lx argc=%d stack=0x%lx\n",
+           entry_point, argn, new_rsp);
+    asm volatile(
+        "mov %%rsp, %[save]\n\t"   /* stash kernel rsp (rip-relative write) */
+        "mov %%rbx, %%rsp\n\t"    /* switch to chosen stack position        */
+        "call *%%rax\n\t"          /* call _start(argv, argn)                */
+        "mov %[save], %%rsp\n\t"  /* restore kernel rsp                     */
+        : [save] "+m"(_saved_kernel_rsp)
+        : "a"(entry_point), "b"(new_rsp), "D"(argv), "S"((long)argn)
+        : "memory", "rcx", "rdx", "r8", "r9", "r10", "r11"
+    );
+
+    // Restore the caller's address space, free the process's pages and ELF buffer.
     switch_address_space(old_cr3);
-
-    // Free the child's user-space pages and the PML4 itself
     free_user_pages(new_pml4);
     free_phys_page(new_cr3);
-
-    return ret;
+    free(buf);
+    return 0;
 }

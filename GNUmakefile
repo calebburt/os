@@ -137,10 +137,13 @@ obj/%.asm.o: %.asm GNUmakefile
 clean:
 	rm -rf bin obj
 
+limine/limine:
+	$(MAKE) -C limine
+
 .PHONY: iso
 iso: image.iso
 
-image.iso: bin/$(OUTPUT) limine.conf linker.lds
+image.iso: bin/$(OUTPUT) limine.conf linker.lds limine/limine
 	# Create a directory which will be our ISO root.
 	mkdir -p iso_root
 
@@ -168,10 +171,18 @@ image.iso: bin/$(OUTPUT) limine.conf linker.lds
 
 # User-space programs: every user/*.c becomes user/<name> (no extension).
 override USER_SRCS := $(wildcard user/*.c)
-override USER_BINS := $(USER_SRCS:.c=)
+# Comment out user/solace if solace is not downloaded
+override USER_BINS := $(USER_SRCS:.c=) user/solace
 
-user/%: user/%.c libc/stdio.h libc/syscall.h
-	gcc -ffreestanding -nostdlib -static -I. -o $@ $<
+override USER_LIBC := libc/crt0.c libc/stdio.c libc/stdlib.c libc/string.c libc/math.c
+
+override SOLACE_SRCS := $(wildcard ../csolace/src/*.c)
+
+user/%: user/%.c $(USER_LIBC) build.sh
+	./build.sh -o $@ $<
+
+user/solace: $(SOLACE_SRCS) $(USER_LIBC) build.sh
+	./build.sh -o $@ $(SOLACE_SRCS)
 
 .PHONY: user-bins
 user-bins: $(USER_BINS)
@@ -192,7 +203,7 @@ disk.img: $(USER_BINS)
 	done
 
 .PHONY: qemu
-qemu: iso disk.img
+qemu:
 	unset GTK_EXE_PREFIX LOCPATH XDG_DATA_HOME GSETTINGS_SCHEMA_DIR GIO_MODULE_DIR GTK_PATH GTK_IM_MODULE_FILE; \
 	qemu-system-x86_64 -cdrom image.iso -m 512M \
 		-drive file=disk.img,format=raw,if=ide,index=0 -boot d --enable-kvm
@@ -212,4 +223,4 @@ user: $(USER_BINS)
 	for b in $(USER_BINS); do sudo cp $$b mnt/; done
 
 .PHONY: run
-run: qemu
+run: qemu iso disk.img

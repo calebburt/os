@@ -1,7 +1,7 @@
 #include "libc/stdio.h"
 
-int _start(char *argv[], int argn) {
-    const char *path = argn > 0 ? argv[0] : "/1";
+int main(int argc, char *argv[]) {
+    const char *path = argc > 1 ? argv[1] : "/1";
 
     long fd = sys_open((char*)path, O_RDONLY);
     if (fd < 0) {
