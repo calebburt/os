@@ -223,4 +223,4 @@ user: $(USER_BINS)
 	for b in $(USER_BINS); do sudo cp $$b mnt/; done
 
 .PHONY: run
-run: qemu iso disk.img
+run: iso disk.img qemu

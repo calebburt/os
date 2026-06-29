@@ -610,10 +610,14 @@ static bool execute_c0(struct flanterm_context *ctx, uint8_t c) {
             }
             return true;
         case '\b':
+            // Local mod: treat BS as a backspace, not a move-left (which is what the VT100 spec says).
             ctx->get_cursor_pos(ctx, &x, &y);
             if (x > 0) {
                 ctx->set_cursor_pos(ctx, x - 1, y);
             }
+            // Print space to erase the character at the cursor position, then move back again.
+            ctx->raw_putchar(ctx, ' ');
+            ctx->set_cursor_pos(ctx, x - 1, y);
             return true;
         case '\t':
             ctx->get_cursor_pos(ctx, &x, &y);
